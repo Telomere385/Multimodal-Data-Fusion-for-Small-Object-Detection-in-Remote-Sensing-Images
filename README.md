@@ -1,330 +1,276 @@
-# YOLOv11-RGBT: Towards a Comprehensive Multispectral Object Detection Framework
+# YOLOv11-RGBT
 
-## Introduction
-This project aims to demonstrate how to configure visible and infrared datasets to accommodate multimodal object detection tasks based on YOLOv11. With three different configuration methods (directory configuration and TXT file configuration), you can easily associate visible light datasets with infrared datasets.
+这是一个基于 Ultralytics / YOLOv11 修改的多模态目标检测工程，支持 `RGBT`、`RGBRGB6C`、`Gray`、`SimOTM` 等数据读取与训练模式。
 
-- YAML files for all YOLO series from YOLOv3 to YOLOv12, along with corresponding RGBT YAML files, have been added.
-- The training mode of YOLOv11 itself is retained. It is recommended to learn how to set up the YOLOv11 environment and how to use it before using this project (YOLOv11 environment can be used seamlessly).
-![YOLOv11-RGBT-RGBT:](PaperImages/YOLOv11-RGBT.jpg)
+## 项目结构
 
-
-## Supported image formats:
-1. uint8: 'Gray'  Single-channel 8-bit gray-scale image.
-2. uint16: 'Gray16bit' Single-channel 16-bit gray-scale image.
-3. uint8: 'SimOTM' 'SimOTMBBS'   Single-channel 8-bit gray-scale image TO Three-channel 8-bit gray-scale image.
-4. uint8: 'BGR'  Three-channel 8-bit color image.
-5. unit8: 'RGBT' Four-channel 8-bit color image.(Including early fusion, middle fusion, late fusion, score fusion, weight sharing mode)
-6. unit8: 'RGBRGB6C' Six-channel 8-bit color image.(Including early fusion, middle fusion, late fusion, score fusion, weight sharing mode)
-
-Among them, the directory format of 1-4 is consistent with YOLOv8. With train.txt and val.txt, all you need to do is write the image address below visible, and the data format directory of 'RGBT' is as follows:
-
-
-## Dataset Configuration
-
-### 1. Dataset Structure
-In YOLOv8, the visible light (visible) directory must conform to the dataset configuration principles. Additionally, an infrared (infrared) directory must exist at the same level as the visible light directory. Furthermore, the dataset should be divided into `train` and `val` (optional) subdirectories for training and validation purposes, respectively.
-
-### 2. Configuration Methods
-Below are three recommended configuration methods:
-
-#### Important Notes
-- Ensure that the visible and infrared directories are at the same level.
-- If constructing a YAML file using TXT files, the TXT file paths must include `visible` so that the program can automatically replace it with `infrared`.
-- If you encounter issues, please refer to the `load_image` function in `ultralytics/data/base.py`.
-
----
-
-#### Method 1: Directory Configuration (KAIST Configuration Example)
-Store visible and infrared data in directories at the same level, with each modality divided into `train` and `val` subdirectories. The directory structure is as follows:
-
-```
-dataset/  # Root directory of the dataset
-├── train/  # Store training data
-│   ├── visible/  # Data related to visible light images
-│   │   ├── images/  # Visible light image files
-│   │   └── labels/  # Label files for visible light images (e.g., annotation information)
-│   └── infrared/  # Data related to infrared images
-│       ├── images/  # Infrared image files
-│       └── labels/  # Label files for infrared images (e.g., annotation information)
-└── val/  # Store validation data
-    ├── visible/  # Data related to visible light images
-    │   ├── images/  # Visible light image files
-    │   └── labels/  # Label files for visible light images (e.g., annotation information)
-    └── infrared/  # Data related to infrared images
-        ├── images/  # Infrared image files
-        └── labels/  # Label files for infrared images (e.g., annotation information)
-
----------------------------------------------------------------------
-
-# KAIST.yaml
-
-# train and val data as 1) directory: path/images/
-train: dataset/visible/images/train  # 7601 images
-val:  dataset/visible/images/val # 2257 images
-
-# number of classes
-nc: 1
-
-# class names
-names: [ 'person', ]
-
------------------------------------------------------------------------
+```text
+.
+|-- configs/
+|   |-- predict/
+|   |   `-- example_rgbt.yaml
+|   |-- train/
+|   |   `-- example_rgbt.yaml
+|   `-- val/
+|       `-- example_rgbt.yaml
+|-- pyproject.toml
+|-- README.md
+|-- README_Zh.md
+|-- scripts/
+|   |-- train.py
+|   |-- val.py
+|   `-- predict.py
+`-- ultralytics/
 ```
 
-- **train/visible**: Stores visible light images and their labels for the training set.
-- **train/infrared**: Stores infrared images and their labels for the training set.
-- **val/visible**: Stores visible light images and their labels for the validation set.
-- **val/infrared**: Stores infrared images and their labels for the validation set.
+仓库保留了修改后的 `ultralytics` 核心代码，并移除了文档、测试、示例资源和本地训练输出，更适合作为你自己的 GitHub 工程维护。
 
-The program will automatically recognize visible and infrared data through the directory structure.
+## 环境配置
 
-#### Method 2: Directory Configuration (Configuration Example)
-Under the second-level directory, store visible and infrared data in directories at the same level, with each modality divided into `train` and `val` subdirectories. The directory structure is as follows:
-
+```powershell
+conda create -n yolov11-rgbt python=3.10 -y
+conda activate yolov11-rgbt
+conda install pytorch torchvision pytorch-cuda=12.1 -c pytorch -c nvidia -y
+pip install -e .
+pip install albumentations pycocotools
 ```
+
+如果只使用 CPU：
+
+```powershell
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+pip install -e .
+pip install albumentations pycocotools
+```
+
+## 数据组织约定
+
+在 `RGBT` 模式下，可见光和红外图像需要保持相同的相对路径，程序会自动把路径中的 `visible` 替换成 `infrared` 完成配对。
+
+示例：
+
+```text
 dataset/
-├── images/
-│   ├── visible/
-│   │   ├── train/  # Store training visible light images
-│   │   └── val/    # Store validation visible light images
-│   └── infrared/
-│       ├── train/  # Store training infrared images
-│       └── val/    # Store validation infrared images
-└── labels/
-    ├── visible/
-    │   ├── train/  # Store training visible light image labels
-    │   └── val/    # Store validation visible light image labels
-    └── infrared/
-        ├── train/  # Store training infrared image labels
-        └── val/    # Store validation infrared image labels
-
----------------------------------------------------------------------
-
-# KAIST.yaml
-
-# train and val data as 1) directory: path/images/
-train: dataset/images/visible/train  # 7601 images
-val:   dataset/images/visible/val # 2257 images
-
-# number of classes
-nc: 1
-
-# class names
-names: [ 'person', ]
-
------------------------------------------------------------------------
+|-- images/
+|   |-- visible/
+|   |   |-- train/
+|   |   `-- val/
+|   `-- infrared/
+|       |-- train/
+|       `-- val/
+`-- labels/
+    |-- visible/
+    |   |-- train/
+    |   `-- val/
+    `-- infrared/
+        |-- train/
+        `-- val/
 ```
 
-- **`images/`**: Stores all image data.
-  - **`visible/`**: Contains visible light images.
-    - **`train/`**: Visible light images for model training.
-    - **`val/`**: Visible light images for model validation.
-  - **`infrared/`**: Contains infrared images.
-    - **`train/`**: Infrared images for model training.
-    - **`val/`**: Infrared images for model validation.
+对应实现位于 `ultralytics/data/base.py` 和 `ultralytics/data/loaders.py`。
 
-- **`labels/`**: Stores all image label information (e.g., annotation files, comments).
-  - **`visible/`**: Contains labels for visible light images.
-    - **`train/`**: Labels for the training set of visible light images.
-    - **`val/`**: Labels for the validation set of visible light images.
-  - **`infrared/`**: Contains labels for infrared images.
-    - **`train/`**: Labels for the training set of infrared images.
-    - **`val/`**: Labels for the validation set of infrared images.
+## 使用方式
 
-The program will automatically recognize visible and infrared data through the directory structure.
+现在推荐使用配置文件驱动训练、验证和推理。你只需要把实验参数写进 `configs/` 目录下的 YAML 文件。
 
-#### Method 3: TXT File Configuration (VEDAI Configuration Example)
-Use TXT files to specify data paths. The TXT file content should include visible light image paths, and the program will automatically replace them with the corresponding infrared paths. TXT files need to specify the paths for the training and validation sets (default configuration method for YOLOv5, YOLOv8, YOLOv11).
+训练配置示例：
 
-```
-dataset/
-├── images/
-│   ├── visible/    # Store  visible light images
-│   │   ├── image1.jpg  
-│   │   └── image2.jpg
-│   │   └── ...      
-│   └── infrared/  #  Store  visible light images
-│       ├── image1.jpg   
-│       └── image2.jpg  
-│       └── ...         
-└── labels/
-    ├── visible/  # Store  visible light labels
-    │   ├── image1.txt   
-    │   └── image2.txt 
-    └── infrared/  # Store  infrared light labels
-        ├── image1.txt
-        └── image2.txt    
-        
----------------------------------------------------------------------
+```yaml
+model: ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion.yaml
+data: path/to/your_dataset.yaml
 
-# VEDAI.yaml
+epochs: 100
+imgsz: 640
+batch: 16
+workers: 4
+device: "0"
+optimizer: SGD
 
-train:  G:/wan/data/RGBT/VEDAI/VEDAI_train.txt  # 16551 images
-val:  G:/wan/data/RGBT/VEDAI/VEDAI_trainval.txt # 4952 images
+project: runs/train
+name: example_rgbt
 
-# number of classes
-nc: 9
-
-# class names
-names: ['plane', 'boat', 'camping_car', 'car', 'pick-up', 'tractor', 'truck', 'van', 'others']
-
------------------------------------------------------------------------
-        
+use_simotm: RGBT
+channels: 4
+close_mosaic: 0
+cache: false
 ```
 
-**Example TXT File Content:**
+使用配置文件训练：
 
-**train.txt**
-```
-dataset/images/visible/image1.jpg
-dataset/images/visible/image2.jpg
-dataset/images/visible/image3.jpg
+```powershell
+python scripts/train.py --config configs/train/example_rgbt.yaml
 ```
 
-**val.txt**
-```
-dataset/images/visible/image4.jpg
-dataset/images/visible/image5.jpg
-dataset/images/visible/image6.jpg
-```
+如果只想临时覆盖某几个参数，可以直接在命令行追加：
 
-The program will replace `visible` with `infrared` in the paths to find the corresponding infrared images.
-
-### 3. Principle Explanation
-In the `load_image` function in `ultralytics/data/base.py`, there is a line of code that replaces `visible` with `infrared` in the visible light path. Therefore, as long as there is an infrared directory at the same level as the visible light directory, the program can correctly load the corresponding infrared data.
-
-
----
-
-## Quick Start Guide
-
-### 1. Clone the Project
-```bash
-git clone https://github.com/wandahangFY/YOLOv11-RGBT.git 
-cd YOLOv11-RGBT
+```powershell
+python scripts/train.py --config configs/train/example_rgbt.yaml --device 1 --batch 8
 ```
 
-### 2. Prepare the Dataset
-Configure your dataset directory or TXT file according to one of the three methods mentioned above.
+如果不使用 `--config`，那么必须显式提供 `--model` 和 `--data`。
 
-### 3. Install Dependencies
-```bash
-pip install -r requirements.txt
+使用配置文件验证：
+
+```powershell
+python scripts/val.py --config configs/val/example_rgbt.yaml
 ```
 
-### 4. Run the Program
-```bash
-python train.py --data your_dataset_config.yaml
-```
-#### Explanation of Training Modes
+同样支持临时覆盖：
 
-Below are the Python script files for different training modes included in the project, each targeting specific training needs and data types.
-
-4.1. **`train.py`**
-   - Basic training script.
-   - Used for standard training processes, suitable for general image classification or detection tasks.
-
-2. **`train-rtdetr.py`**
-   - Training script for RTDETR (Real-Time Detection Transformer).
-
-3. **`train_Gray.py`**
-   - Grayscale image training script.
-   - Specifically for processing datasets of grayscale images, suitable for tasks requiring image analysis in grayscale space.
-
-4. **`train_RGBRGB.py`**
-   - RGB-RGB image pair training script.
-   - Used for training with two sets of RGB images simultaneously, such as paired training of visible and infrared images, suitable for multimodal image analysis.
-
-5. **`train_RGBT.py`**
-   - RGB-T (RGB-Thermal) image pair training script.
-   - Used for paired training of RGB images and thermal (infrared) images, suitable for applications requiring the combination of visible light and thermal imaging information.
-
-### 5. Testing
-Run the test script to verify if the data loading is correct:
-```bash
-python val.py
+```powershell
+python scripts/val.py --config configs/val/example_rgbt.yaml --batch 8 --device 1
 ```
 
----
+使用配置文件推理：
 
-## Important Notes (Emphasized Again)
-- Ensure that the visible and infrared directories are at the same level, and there are `train` and `val` subdirectories under each modality.
-- TXT file paths must include `visible` so that the program can automatically replace it with `infrared`.
-- If you encounter issues, please refer to the `load_image` function in `ultralytics/data/base.py`.
+```powershell
+python scripts/predict.py --config configs/predict/example_rgbt.yaml
+```
 
----
-# Dataset Download Links
+同样支持临时覆盖：
 
-Here are the Baidu Netdisk links for the converted VEIAI, LLVIP, KAIST, M3FD datasets (you need to change the addresses in the yaml files. If you use txt files to configure yaml files, you need to replace the addresses in the txt files with your own addresses: open with Notepad, Ctrl+H). (Additionally, if you use the above datasets, please correctly cite the original papers. If there is any infringement, please contact the original authors, and it will be removed immediately.)
+```powershell
+python scripts/predict.py --config configs/predict/example_rgbt.yaml --conf 0.4
+```
 
-- VEIAI (Vehicle Detection in Aerial Imagery (VEDAI) : a benchmark (greyc.fr))
-- LLVIP (bupt-ai-cz/LLVIP: LLVIP: A Visible-infrared Paired Dataset for Low-light Vision (github.com))
-- KAIST
-  - Original address (SoonminHwang/rgbt-ped-detection: KAIST Multispectral Pedestrian Detection Benchmark [CVPR '15] (github.com))
-  - Download of the complete and cleaned KAIST dataset - kongen - CNBlogs (cnblogs.com)
-- M3FD (JinyuanLiu-CV/TarDAL: CVPR 2022 | Target-aware Dual Adversarial Learning and a Multi-scenario Multi-Modality Benchmark to Fuse Infrared and Visible for Object Detection (github.com))
+## RGBT 四通道实现说明
 
-Baidu Netdisk Link:
-Link: https://pan.baidu.com/s/1xOUP6UTQMXwgErMASPLj2A Extraction Code: 9rrf
+默认 YOLO 只假设输入是 3 通道 RGB 图像，而这个仓库为了支持 `RGBT` 四通道输入，对源码做了成体系的修改。核心思路不是简单把第一层卷积从 3 通道改成 4 通道，而是把整条输入链路都改造成了“多模态输入系统”。
 
+### 1. 参数层新增了通道数和模态类型
 
+仓库在 [ultralytics/cfg/default.yaml](E:/master/github_project/YOLOv11-RGBT/ultralytics/cfg/default.yaml:131) 中增加了两个关键参数：
 
-## Contributions
-PRs or Issues are welcome to jointly improve the project. This project is a long-term open-source project and will continue to be updated for free in the future, so there is no need to worry about cost issues.
+- `channels`
+- `use_simotm`
 
-## Contact Information
-- GitHub: [https://github.com/wandahangFY](https://github.com/wandahangFY)
-- Email: wandahang@foxmail.com
-- QQ: 1753205688
-- QQ Group: 483264141
+其中：
 
-![QQ Group](PaperImages/QQ.png)
+- `channels` 用来声明模型输入通道数，例如 `RGBT` 时通常设为 `4`
+- `use_simotm` 用来声明输入模式，例如 `RGBT`、`RGBRGB6C`、`Gray`、`SimOTM`
 
+这样训练、验证、推理都可以显式知道当前处理的是哪种模态输入，而不是默认按 3 通道 RGB 处理。
 
-## Chinese Interpretation Link
-- [Modified YOLOv8 for RGBT multi-channel and single-channel gray image detection  ](https://zhuanlan.zhihu.com/p/716419187)
+### 2. 数据加载层负责把 visible 和 infrared 拼成 4 通道
 
-## Video Tutorial Link
-- [Video Tutorial and Secondary Innovation Solutions for YOLO-MIF]() [TODO: Detailed tutorial in text-based PPT format]
+最关键的改动在 [ultralytics/data/base.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/base.py:267) 的 `load_image()`。
 
-## Secondary Innovation Points Summary and Code Implementation (TODO)
-- [Secondary Innovation Solutions]() [The last page of the PPT tutorial provides some secondary innovation solutions. TODO: Will be written and updated later if needed]
+在 `RGBT` 分支中，代码会：
 
-## Paper Link
-[YOLO-MIF: Improved YOLOv8 with Multi-Information fusion for object detection in Gray-Scale images]( https://www.sciencedirect.com/science/article/pii/S1474034624003574)
+1. 读取 visible 图像，得到 3 通道 BGR
+2. 将路径中的 `visible` 替换为 `infrared`，读取对应红外图像，得到 1 通道灰度图
+3. 如果两个模态尺寸不同，分别 resize
+4. 最后将 `B,G,R` 和红外通道合并成一个 4 通道图像
 
-[https://www.sciencedirect.com/science/article/pii/S1474034624003574]( https://www.sciencedirect.com/science/article/pii/S1474034624003574)
+也就是说，进入网络前的数据不再是“两张图”，而是一张 `H x W x 4` 的四通道图像。
 
-## Citation Format
-Wan, D.; Lu, R.; Hu, B.; Yin, J.; Shen, S.; xu, T.; Lang, X. YOLO-MIF: Improved YOLOv8 with Multi-Information Fusion for Object Detection in Gray-Scale Images. Advanced Engineering Informatics 2024, 62, 102709, doi:10.1016/j.aei.2024.102709.
+同样的逻辑在推理加载器 [ultralytics/data/loaders.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/loaders.py:547) 里也实现了一遍，因为推理阶段不走训练时的数据集类。
 
+### 3. train / val / predict 全链路透传四通道信息
 
-## Reference Links
-- [Codebase used for overall framework: YOLOv8](https://github.com/ultralytics/ultralytics)
-- [Reparameterization reference code by Ding Xiaohan: DiverseBranchBlock](https://github.com/DingXiaoH/DiverseBranchBlock)
-- [Some modules reference from Devil Mask's open-source repository](https://github.com/z1069614715/objectdetection_script)
-- [YOLOv7](https://github.com/WongKinYiu/yolov7)
-- [Albumentations Data Augmentation Library](https://github.com/albumentations-team/albumentations)
-- Reparameterization validation code references from Handwritten AI's reparameterization course
+为了让数据构建、warmup、推理过程都知道当前输入不是默认的 3 通道，仓库把 `use_simotm` 和 `channels` 一路传了下去。
 
-## Closing Remarks
-Thank you for your interest and support in this project. The authors strive to provide the best quality and service, but there is still much room for improvement. If you encounter any issues or have any suggestions, please let us know.
-Furthermore, this project is currently maintained by the author personally, so there may be some oversights and errors. If you find any issues, feel free to provide feedback and suggestions.
+关键位置包括：
 
-## Other Open-Source Projects
-Other open-source projects are being organized and released gradually. Please check the author's homepage for downloads in the future.
-[Homepage](https://github.com/wandahangFY)
+- [ultralytics/data/build.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/build.py:96)
+- [ultralytics/models/yolo/detect/train.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/models/yolo/detect/train.py:43)
+- [ultralytics/models/yolo/detect/val.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/models/yolo/detect/val.py:243)
+- [ultralytics/engine/predictor.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/engine/predictor.py:250)
+- [ultralytics/engine/validator.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/engine/validator.py:98)
 
-## FAQ
-1. Added README.md file (Completed)
-2. Detailed tutorials (TODO)
-3. Project environment setup (The entire project is based on YOLOv8 version as of November 29, 2023, configuration referenced in README-YOLOv8.md file and requirements.txt)
-4. Explanation of folder correspondences (Consistent with YOLOv8, hyperparameters unchanged) (TODO: Detailed explanation)
-5. Summary of secondary innovation points and code implementation (TODO)
-6. Paper illustrations:
-   - Principle diagrams, network structure diagrams, flowcharts: PPT (Personal choice, can also use Visio, Edraw, AI, etc.)
-   - Experimental comparisons: Orgin (Matlab, Python, R, Excel all applicable)
+比如验证阶段的 warmup 已经不是默认的 `(batch, 3, H, W)`，而是改成了 `(batch, channels, H, W)`，见 [ultralytics/engine/validator.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/engine/validator.py:163)。
 
-## Star History
+### 4. 数据增强和可视化也做了四通道适配
 
-[![Star History Chart](https://api.star-history.com/svg?repos=wandahangFY/YOLOv11-RGBT&type=Date)](https://star-history.com/#wandahangFY/YOLOv11-RGBT&Date)
+只修改读取层还不够，因为默认的数据增强和显示流程通常只服务于 1 通道或 3 通道图像。
+
+仓库在 [ultralytics/data/augment.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/augment.py:1074) 中增加了按通道数分支处理的逻辑，例如：
+
+- 4 通道 padding 使用 `(114, 114, 114, 114)`
+- 区分 1 / 3 / 4 / 6 通道做不同处理
+- 对 4 通道图像通常只对前 3 个 BGR 通道做颜色类增强，红外通道单独保留或单独处理
+
+可视化和推理显示也做了适配，例如：
+
+- [ultralytics/utils/plotting.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/utils/plotting.py:917)
+- [ultralytics/engine/predictor.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/engine/predictor.py:452)
+
+因为 4 通道图像不能再按普通 RGB 图像直接显示，所以这里专门增加了对 4 通道和 6 通道的分支显示逻辑。
+
+### 5. 模型结构层真正支持四通道输入和双分支融合
+
+模型 YAML 中明确把输入通道改成了 `ch: 4`，例如：
+[ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion.yaml](E:/master/github_project/YOLOv11-RGBT/ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion.yaml:17)
+
+但作者并没有把 4 通道直接塞进一个普通 backbone，而是通过自定义模块把 4 通道再次拆成两个分支：
+
+- `SilenceChannel [0,3]`：取前 3 个通道，作为 visible 分支
+- `SilenceChannel [3,4]`：取第 4 个通道，作为 infrared 分支
+
+这个模块定义在：
+[ultralytics/nn/modules/conv.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/nn/modules/conv.py:352)
+
+本质就是按通道切片：
+
+```python
+return x[..., self.c_start:self.c_end, :, :]
+```
+
+模型解析器也专门对这个模块做了支持，见：
+[ultralytics/nn/tasks.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/nn/tasks.py:1091)
+
+解析器知道 `SilenceChannel[a,b]` 的输出通道数是 `b-a`，这样后续网络层的 shape 推导才能正确进行。
+
+### 6. 以 midfusion 为例，网络如何处理 RGBT
+
+以 [yolo11-RGBT-midfusion.yaml](E:/master/github_project/YOLOv11-RGBT/ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion.yaml:21) 为例：
+
+1. 输入首先是 4 通道张量
+2. 通过 `SilenceChannel [0,3]` 切出 visible 三通道
+3. 通过 `SilenceChannel [3,4]` 切出 infrared 单通道
+4. 两个分支分别走自己的 backbone
+5. 在中间层通过 `Concat` 等方式融合 visible 和 infrared 特征
+6. 融合后的特征再进入检测头
+
+所以这个仓库的核心不是“把第一层卷积改成 4 通道”，而是“4 通道输入 + 双分支建模 + 指定层融合”。
+
+### 7. 和默认 YOLO 的本质区别
+
+默认 YOLO：
+
+- 假设输入就是单张 3 通道 RGB 图像
+- 数据加载只读一张图
+- 数据增强默认只考虑 1 通道或 3 通道
+- 模型 stem 默认只服务于单路输入
+
+这个仓库的 RGBT 版本：
+
+- 数据层支持 visible / infrared 自动配对
+- 输入层支持拼成 4 通道张量
+- train / val / predict 全链路支持 `channels=4`
+- 数据增强和显示流程支持 4 通道
+- 模型结构支持 visible / infrared 双分支
+- 通过 early / mid / late fusion 等方式进行多模态融合
+
+### 8. 最值得优先阅读的源码位置
+
+如果只想快速理解四通道 RGBT 是怎么做出来的，建议优先看下面这些文件：
+
+- [ultralytics/data/base.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/base.py:267)
+- [ultralytics/data/loaders.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/loaders.py:547)
+- [ultralytics/nn/modules/conv.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/nn/modules/conv.py:352)
+- [ultralytics/nn/tasks.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/nn/tasks.py:1091)
+- [ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion.yaml](E:/master/github_project/YOLOv11-RGBT/ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion.yaml:17)
+- [ultralytics/data/augment.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/augment.py:1074)
+- [ultralytics/engine/predictor.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/engine/predictor.py:117)
+
+一句话总结：这个仓库对源码的深度修改，不在于“把第一层卷积改成 4 输入通道”，而在于把 Ultralytics 的整条输入链路都改造成了多模态输入系统。
+
+## 说明
+
+- 自定义融合模型配置位于 `ultralytics/cfg/models/*-RGBT/`。
+- `ultralytics/cfg/datasets/` 下的数据集 YAML 仍保留了原作者本地路径，需要按你自己的数据位置修改。
+- 训练配置示例见 [configs/train/example_rgbt.yaml](E:/master/github_project/YOLOv11-RGBT/configs/train/example_rgbt.yaml:1)。
+- 验证配置示例见 [configs/val/example_rgbt.yaml](E:/master/github_project/YOLOv11-RGBT/configs/val/example_rgbt.yaml:1)。
+- 推理配置示例见 [configs/predict/example_rgbt.yaml](E:/master/github_project/YOLOv11-RGBT/configs/predict/example_rgbt.yaml:1)。
+- 大权重文件、数据集和 `runs/` 输出默认不纳入 Git 管理。
