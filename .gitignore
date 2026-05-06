@@ -140,11 +140,14 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# datasets and projects (ignore /datasets dir at root only to allow for docs/en/datasets dir)
+# Project data and outputs
 /datasets
 runs/
 wandb/
+mlruns/
+*.cache
 .DS_Store
+Thumbs.db
 
 # Neural Network weights -----------------------------------------------------------------------------------------------
 weights/
@@ -173,4 +176,17 @@ pnnx*
 
 # calibration image
 calibration_*.npy
+
+# Local experiment artifacts
+*.csv
+*.tsv
+*.npy
+*.npz
+*.tmp
+*.bak
+
+# Local notes and attachments
+*.pdf
+
+# Project-specific legacy local folder
 /PVELAD/

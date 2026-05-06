@@ -1,0 +1,12 @@
+weights: path/to/best.pt
+data: path/to/your_dataset.yaml
+
+imgsz: 640
+batch: 16
+device: "0"
+project: runs/val
+name: example_rgbt
+split: val
+
+use_simotm: RGBT
+channels: 4

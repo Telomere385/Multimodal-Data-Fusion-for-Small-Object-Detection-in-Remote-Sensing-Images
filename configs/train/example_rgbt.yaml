@@ -1,0 +1,17 @@
+model: ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion.yaml
+data: path/to/your_dataset.yaml
+
+epochs: 100
+imgsz: 640
+batch: 16
+workers: 4
+device: "0"
+optimizer: SGD
+
+project: runs/train
+name: example_rgbt
+
+use_simotm: RGBT
+channels: 4
+close_mosaic: 0
+cache: false

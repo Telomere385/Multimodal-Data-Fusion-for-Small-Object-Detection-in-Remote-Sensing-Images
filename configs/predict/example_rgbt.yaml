@@ -1,0 +1,13 @@
+weights: path/to/best.pt
+source: path/to/images/visible/val
+
+imgsz: 640
+device: "0"
+project: runs/predict
+name: example_rgbt
+conf: 0.25
+
+use_simotm: RGBT
+channels: 4
+save: true
+save_frames: false
