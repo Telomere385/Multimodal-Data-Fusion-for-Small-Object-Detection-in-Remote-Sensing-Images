@@ -24,10 +24,12 @@ from ultralytics.nn.modules import (
     SPP,
     SPPELAN,
     SPPF,
+    RGBTResidualFusion,
     AConv,
     ADown,
     Bottleneck,
     BottleneckCSP,YOLOv4_BottleneckCSP,YOLOv4_Bottleneck,
+    BiFPNFusion,
     C2f,
     C2fAttn,
     C2fCIB,
@@ -43,6 +45,7 @@ from ultralytics.nn.modules import (
     Conv2,
     ConvTranspose,
     Detect,
+    DetectSR,
     DWConv,
     DWConvTranspose2d,
     Focus,
@@ -254,7 +257,7 @@ class BaseModel(torch.nn.Module):
         """
         self = super()._apply(fn)
         m = self.model[-1]  # Detect()
-        if isinstance(m, (Detect, DetectDeepDBB, DetectWDBB,DetectV8,DetectAux)):  # includes all Detect subclasses like Segment, Pose, OBB, WorldDetect
+        if isinstance(m, (Detect, DetectSR, DetectDeepDBB, DetectWDBB,DetectV8,DetectAux)):  # includes all Detect subclasses like Segment, Pose, OBB, WorldDetect
             m.stride = fn(m.stride)
             m.anchors = fn(m.anchors)
             m.strides = fn(m.strides)
@@ -328,6 +331,8 @@ class DetectionModel(BaseModel):
                 """Performs a forward pass through the model, handling different Detect subclass types accordingly."""
                 if isinstance(m, (DetectAux,)):
                     return self.forward(x)[:3]
+                if isinstance(m, DetectSR):
+                    return self.forward(x)["det"]
                 if self.end2end:
                     return self.forward(x)["one2many"]
                 return self.forward(x)[0] if isinstance(m, (Segment, Pose, OBB)) else self.forward(x)
@@ -1053,6 +1058,16 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
+        elif m is BiFPNFusion:
+            c2 = args[0]
+            if c2 != nc:
+                c2 = make_divisible(min(c2, max_channels) * width, 8)
+            args = [[ch[x] for x in f], c2, *args[1:]]
+        elif m is RGBTResidualFusion:
+            c2 = args[0]
+            if c2 != nc:
+                c2 = make_divisible(min(c2, max_channels) * width, 8)
+            args = [[ch[x] for x in f], c2, *args[1:]]
         elif m is CrossAttentionShared:
             c2 =  args[0]
             if c2 != nc:  # if c2 not equal to number of classes (i.e. for Classify() output)
@@ -1070,11 +1085,11 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args = [args[0]]
             n = 1
             # print(args,c2)
-        elif m in frozenset({Detect,DetectDeepDBB,DetectWDBB,DetectV8,DetectAux, WorldDetect, Segment, Pose, OBB, ImagePoolingAttn, v10Detect}):
+        elif m in frozenset({Detect,DetectSR,DetectDeepDBB,DetectWDBB,DetectV8,DetectAux, WorldDetect, Segment, Pose, OBB, ImagePoolingAttn, v10Detect}):
             args.append([ch[x] for x in f])
             if m is Segment:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
-            if m in {Detect, Segment, Pose, OBB,DetectDeepDBB,DetectWDBB,DetectV8,DetectAux}:
+            if m in {Detect, DetectSR, Segment, Pose, OBB,DetectDeepDBB,DetectWDBB,DetectV8,DetectAux}:
                 m.legacy = legacy
         elif m is RTDETRDecoder:  # special case, channels arg must be passed in index 1
             args.insert(1, [ch[x] for x in f])
@@ -1194,7 +1209,7 @@ def guess_model_task(model):
                 return "pose"
             elif isinstance(m, OBB):
                 return "obb"
-            elif isinstance(m, (Detect,DetectDeepDBB,DetectV8,DetectAux,DetectWDBB, WorldDetect, v10Detect)):
+            elif isinstance(m, (Detect,DetectSR,DetectDeepDBB,DetectV8,DetectAux,DetectWDBB, WorldDetect, v10Detect)):
                 return "detect"
 
     # Guess from model filename

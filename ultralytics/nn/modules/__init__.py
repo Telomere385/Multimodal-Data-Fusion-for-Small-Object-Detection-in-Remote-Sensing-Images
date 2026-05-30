@@ -28,6 +28,7 @@ from .block import (
     ELAN1,ELAN_t,ELAN_H,ELAN,SPPCSPCSIM,SPPCSPC,MP_2,MP_1,YOLOv4_BottleneckCSP,YOLOv4_Bottleneck,
     PSA,CrossAttentionShared, CrossMLCA , TensorSelector,CrossMLCAv2,DeepDiverseBranchBlock,RecursionDiverseBranchBlock,
     C3k2_DeepDBB,C3k2_DBB,C3k2_WDBB,C2f_DeepDBB,C2f_WDBB,C2f_DBB,C3k_RDBB,C2f_RDBB,C3k2_RDBB,A2C2f,
+    BiFPNFusion, RGBTResidualFusion,
     SPP,
     SPPELAN,
     SPPF,
@@ -79,7 +80,7 @@ from .conv import (
 
 from .rep_block import  DiverseBranchBlock, WideDiverseBranchBlock, DeepDiverseBranchBlock,FeaturePyramidAggregationAttention,SilenceLayer
 
-from .head import OBB, Classify, Detect, Pose, RTDETRDecoder, Segment, WorldDetect, v10Detect, DetectDeepDBB, DetectWDBB,DetectV8,DetectAux
+from .head import OBB, Classify, Detect, DetectSR, Pose, RTDETRDecoder, Segment, WorldDetect, v10Detect, DetectDeepDBB, DetectWDBB,DetectV8,DetectAux
 from .transformer import (
     AIFI,
     MLP,
@@ -124,6 +125,8 @@ __all__ = (
     "SCDown",
     "C2fPSA",
     "C2PSA",
+    "BiFPNFusion",
+    "RGBTResidualFusion",
     "C2fAttn",
     "C3x",
     "C3TR",
@@ -133,6 +136,7 @@ __all__ = (
     "BottleneckCSP",
     "Proto",
     "Detect",'DetectAux',
+    "DetectSR",
     "Segment",
     "Pose",
     "Classify",

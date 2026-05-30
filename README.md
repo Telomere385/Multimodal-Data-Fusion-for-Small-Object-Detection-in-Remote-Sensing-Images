@@ -266,6 +266,77 @@ return x[..., self.c_start:self.c_end, :, :]
 
 一句话总结：这个仓库对源码的深度修改，不在于“把第一层卷积改成 4 输入通道”，而在于把 Ultralytics 的整条输入链路都改造成了多模态输入系统。
 
+## 新增模型能力
+
+### YOLOv11_RGBT + 残差融合
+
+仓库新增了推荐的 `YOLOv11_RGBT + Residual Fusion` 结构，用于替代原始 midfusion 中 RGB/T 特征的直接 `Concat`。该融合以 RGB 特征作为主路径，将红外特征作为可学习残差项注入：
+
+```python
+fused = rgb_proj + alpha * thermal_proj
+```
+
+关键更新：
+- 新增 `RGBTResidualFusion` 模块。
+- RGB 和 thermal 特征先通过 `1x1 Conv` 对齐到同一通道数。
+- `alpha` 是可学习参数，默认初始化为 `0.1`，训练初期不会过强扰动 RGB 主路径。
+- P3/P4/P5 三个 RGB/T 融合点均替换为残差融合。
+- 新增配置文件：[ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-Residual.yaml](E:/master/github_project/YOLOv11-RGBT/ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-Residual.yaml:1)
+
+训练时将配置中的 `model` 改为：
+```yaml
+model: ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-Residual.yaml
+use_simotm: RGBT
+channels: 4
+```
+
+该版本适合作为当前优先实验方案；原始 `Concat` midfusion、Residual Fusion 和 BiFPN 可以作为三组消融对比。
+
+### YOLOv11_RGBT + BiFPN
+
+仓库新增了 `YOLOv11_RGBT + BiFPN` 结构，用于在 YOLO11 RGBT 双分支特征融合后引入可学习加权的 BiFPN 颈部融合。
+
+关键更新：
+- 新增 `BiFPNFusion` 模块，支持多输入特征的通道对齐、空间尺寸对齐和可学习权重归一化融合。
+- `parse_model()` 已支持在 YAML 中直接使用 `BiFPNFusion`。
+- 新增配置文件：[ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-BiFPN.yaml](E:/master/github_project/YOLOv11-RGBT/ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-BiFPN.yaml:1)
+
+训练时将配置中的 `model` 改为：
+```yaml
+model: ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-BiFPN.yaml
+use_simotm: RGBT
+channels: 4
+```
+
+### YOLOv11_RGBT + SR 辅助分支
+
+仓库新增了 `YOLOv11_RGBT + SR` 超分辨率辅助分支。该结构保持原检测头输出不变，在训练阶段额外从浅层 RGBT 融合特征重建 4 通道输入图像，并将 SR 重建损失加入总 loss，用于增强多模态特征表达。
+
+关键更新：
+- 新增 `SRHead`：从 P3/8 级别特征上采样重建 RGBT 图像。
+- 新增 `DetectSR`：检测输出与 SR 输出共存，推理仍以检测结果为主。
+- `v8DetectionLoss` 已支持叠加 `sr_loss`，默认使用 `L1 loss`。
+- 新增超参数 `sr` 控制 SR 辅助损失权重，默认值为 `0.1`。
+- 训练日志在 SR 模型下会显示 `box_loss / cls_loss / dfl_loss / sr_loss`。
+- 新增配置文件：[ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-SR.yaml](E:/master/github_project/YOLOv11-RGBT/ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-SR.yaml:1)
+
+训练时将配置中的 `model` 改为：
+```yaml
+model: ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-SR.yaml
+use_simotm: RGBT
+channels: 4
+sr: 0.1
+```
+
+### 验证状态
+
+已完成以下静态验证：
+- Python 语法编译检查通过。
+- `yolo11-RGBT-midfusion-BiFPN.yaml` 和 `yolo11-RGBT-midfusion-SR.yaml` 可被 YAML 解析。
+- SR 配置的层引用索引检查通过。
+
+完整模型实例化 forward 需要当前 Python 环境可正常导入 `ultralytics`。如果遇到 `NumPy 2.x` 与旧版 `matplotlib` 二进制扩展不兼容的问题，请先调整环境，例如降级到 `numpy<2` 或升级相关二进制包。
+
 ## 说明
 
 - 自定义融合模型配置位于 `ultralytics/cfg/models/*-RGBT/`。

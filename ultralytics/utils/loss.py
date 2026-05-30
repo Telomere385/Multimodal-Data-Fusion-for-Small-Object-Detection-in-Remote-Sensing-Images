@@ -468,10 +468,26 @@ class v8DetectionLoss:
         return dist2bbox(pred_dist, anchor_points, xywh=False)
 
     def __call__(self, preds, batch):
+        sr_pred = None
+        if isinstance(preds, tuple) and len(preds) > 1 and isinstance(preds[1], dict) and "det" in preds[1]:
+            sr_pred = preds[1].get("sr")
+            preds = preds[1]["det"]
+        if isinstance(preds, dict) and "det" in preds:
+            sr_pred = preds.get("sr")
+            preds = preds["det"]
         if hasattr(self, 'assigner_aux'):
             loss, batch_size = self.compute_loss_aux(preds, batch)
         else:
             loss, batch_size = self.compute_loss(preds, batch)
+        if sr_pred is not None:
+            target = batch["img"].to(self.device, non_blocking=True).float()
+            if target.shape[1] != sr_pred.shape[1]:
+                target = target[:, : sr_pred.shape[1]]
+            if target.shape[2:] != sr_pred.shape[2:]:
+                target = F.interpolate(target, size=sr_pred.shape[2:], mode="bilinear", align_corners=False)
+            sr_gain = getattr(self.hyp, "sr", 0.1)
+            sr_loss = F.l1_loss(sr_pred, target) * sr_gain
+            loss = torch.cat((loss, sr_loss.reshape(1)))
         return loss.sum() * batch_size, loss.detach()
 
     def compute_loss(self, preds, batch):

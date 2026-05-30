@@ -6,6 +6,7 @@ import math
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.nn.init import constant_, xavier_uniform_
 
 from ultralytics.utils.tal import TORCH_1_10, dist2bbox, dist2rbox, make_anchors
@@ -15,7 +16,7 @@ from .conv import Conv, DWConv
 from .transformer import MLP, DeformableTransformerDecoder, DeformableTransformerDecoderLayer
 from .utils import bias_init_with_prob, linear_init
 from .rep_block import *
-__all__ = "Detect", "Segment", "Pose", "Classify", "OBB", "RTDETRDecoder", "v10Detect",'DetectDeepDBB','DetectWDBB','DetectV8','DetectAux'
+__all__ = "Detect", "DetectSR", "Segment", "Pose", "Classify", "OBB", "RTDETRDecoder", "v10Detect",'DetectDeepDBB','DetectWDBB','DetectV8','DetectAux'
 
 
 class Detect(nn.Module):
@@ -170,6 +171,38 @@ class Detect(nn.Module):
         scores, index = scores.flatten(1).topk(min(max_det, anchors))
         i = torch.arange(batch_size)[..., None]  # batch indices
         return torch.cat([boxes[i, index // nc], scores[..., None], (index % nc)[..., None].float()], dim=-1)
+
+
+class SRHead(nn.Module):
+    """Lightweight super-resolution reconstruction head."""
+
+    def __init__(self, c1, c2=4, scale=8, c_=128):
+        super().__init__()
+        self.scale = scale
+        self.cv1 = Conv(c1, c_, 3, 1)
+        self.cv2 = Conv(c_, c_, 3, 1)
+        self.cv3 = nn.Conv2d(c_, c2, 1)
+
+    def forward(self, x):
+        x = self.cv2(self.cv1(x))
+        x = F.interpolate(x, scale_factor=self.scale, mode="bilinear", align_corners=False)
+        return self.cv3(x).sigmoid()
+
+
+class DetectSR(Detect):
+    """YOLO Detect head with an SR auxiliary reconstruction branch."""
+
+    def __init__(self, nc=80, sr_ch=4, sr_scale=8, sr_hidden=128, ch=()):
+        det_ch, sr_in_ch = ch[:-1], ch[-1]
+        super().__init__(nc, det_ch)
+        self.sr_head = SRHead(sr_in_ch, sr_ch, sr_scale, sr_hidden)
+
+    def forward(self, x):
+        sr = self.sr_head(x[-1])
+        det = super().forward(x[: self.nl])
+        if self.training:
+            return {"det": det, "sr": sr}
+        return (det[0], {"det": det[1], "sr": sr}) if isinstance(det, tuple) else (det, sr)
 
 
 class DetectDeepDBB(nn.Module):

@@ -44,6 +44,8 @@ __all__ = (
     "C3k2",
     "C2fPSA",
     "C2PSA",
+    "BiFPNFusion",
+    "RGBTResidualFusion",
     "RepVGGDW",
     "CIB",
     "C2fCIB",
@@ -372,6 +374,53 @@ class BottleneckCSP(nn.Module):
         y1 = self.cv3(self.m(self.cv1(x)))
         y2 = self.cv2(x)
         return self.cv4(self.act(self.bn(torch.cat((y1, y2), 1))))
+
+
+class BiFPNFusion(nn.Module):
+    """Weighted multi-scale feature fusion used by BiFPN."""
+
+    def __init__(self, c1, c2, eps=1e-4):
+        """Initialize BiFPN fusion with input channel list `c1` and output channels `c2`."""
+        super().__init__()
+        c1 = c1 if isinstance(c1, (list, tuple)) else [c1]
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(len(c1), dtype=torch.float32), requires_grad=True)
+        self.proj = nn.ModuleList(Conv(c, c2, 1, 1) if c != c2 else nn.Identity() for c in c1)
+
+    def forward(self, x):
+        """Fuse a list of feature maps with learnable normalized weights."""
+        x = x if isinstance(x, (list, tuple)) else [x]
+        target_size = x[0].shape[2:]
+        weight = F.relu(self.weight)
+        weight = weight / (weight.sum() + self.eps)
+        y = 0
+        for i, xi in enumerate(x):
+            xi = self.proj[i](xi)
+            if xi.shape[2:] != target_size:
+                xi = F.interpolate(xi, size=target_size, mode="nearest")
+            y = y + weight[i] * xi
+        return y
+
+
+class RGBTResidualFusion(nn.Module):
+    """Residual fusion for visible and thermal RGBT features."""
+
+    def __init__(self, c1, c2, alpha=0.1):
+        """Fuse RGB and thermal features as rgb + alpha * thermal."""
+        super().__init__()
+        assert len(c1) == 2, "RGBTResidualFusion expects exactly two input feature maps."
+        self.rgb_proj = Conv(c1[0], c2, 1, 1)
+        self.t_proj = Conv(c1[1], c2, 1, 1)
+        self.alpha = nn.Parameter(torch.tensor(float(alpha), dtype=torch.float32))
+
+    def forward(self, x):
+        """Forward pass with RGB as the identity path and thermal as the residual path."""
+        rgb, thermal = x
+        rgb = self.rgb_proj(rgb)
+        thermal = self.t_proj(thermal)
+        if thermal.shape[2:] != rgb.shape[2:]:
+            thermal = F.interpolate(thermal, size=rgb.shape[2:], mode="nearest")
+        return rgb + self.alpha * thermal
 
 
 class ResNetBlock(nn.Module):
