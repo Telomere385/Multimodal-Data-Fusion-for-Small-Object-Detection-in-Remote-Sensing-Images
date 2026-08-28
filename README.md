@@ -1,8 +1,8 @@
 # YOLOv11-RGBT
 
-这是一个基于 Ultralytics / YOLOv11 修改的多模态目标检测工程，支持 `RGBT`、`RGBRGB6C`、`Gray`、`SimOTM` 等数据读取与训练模式。
+This is a multimodal object detection project modified from Ultralytics / YOLOv11. It supports multiple data loading and training modes, including `RGBT`, `RGBRGB6C`, `Gray`, and `SimOTM`.
 
-## 项目结构
+## Project Structure
 
 ```text
 .
@@ -23,9 +23,9 @@
 `-- ultralytics/
 ```
 
-仓库保留了修改后的 `ultralytics` 核心代码，并移除了文档、测试、示例资源和本地训练输出，更适合作为你自己的 GitHub 工程维护。
+The repository retains the modified core `ultralytics` source code while removing documentation, tests, example resources, and local training outputs, making it more suitable for maintaining as a standalone GitHub project.
 
-## 环境配置
+## Environment Setup
 
 ```powershell
 conda create -n yolov11-rgbt python=3.10 -y
@@ -35,7 +35,7 @@ pip install -e .
 pip install albumentations pycocotools
 ```
 
-如果只使用 CPU：
+For CPU-only usage:
 
 ```powershell
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
@@ -43,11 +43,11 @@ pip install -e .
 pip install albumentations pycocotools
 ```
 
-## 数据组织约定
+## Dataset Organization
 
-在 `RGBT` 模式下，可见光和红外图像需要保持相同的相对路径，程序会自动把路径中的 `visible` 替换成 `infrared` 完成配对。
+In `RGBT` mode, visible-light and infrared images must follow the same relative directory structure. The program automatically replaces `visible` with `infrared` in the image path to locate the corresponding infrared image.
 
-示例：
+Example:
 
 ```text
 dataset/
@@ -67,13 +67,13 @@ dataset/
         `-- val/
 ```
 
-对应实现位于 `ultralytics/data/base.py` 和 `ultralytics/data/loaders.py`。
+The corresponding implementation can be found in `ultralytics/data/base.py` and `ultralytics/data/loaders.py`.
 
-## 使用方式
+## Usage
 
-现在推荐使用配置文件驱动训练、验证和推理。你只需要把实验参数写进 `configs/` 目录下的 YAML 文件。
+The recommended workflow is now configuration-file-driven training, validation, and inference. Experiment parameters only need to be specified in YAML files under the `configs/` directory.
 
-训练配置示例：
+Example training configuration:
 
 ```yaml
 model: ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion.yaml
@@ -95,232 +95,249 @@ close_mosaic: 0
 cache: false
 ```
 
-使用配置文件训练：
+Train using a configuration file:
 
 ```powershell
 python scripts/train.py --config configs/train/example_rgbt.yaml
 ```
 
-如果只想临时覆盖某几个参数，可以直接在命令行追加：
+To temporarily override selected parameters, append them directly to the command:
 
 ```powershell
 python scripts/train.py --config configs/train/example_rgbt.yaml --device 1 --batch 8
 ```
 
-如果不使用 `--config`，那么必须显式提供 `--model` 和 `--data`。
+If `--config` is not used, both `--model` and `--data` must be explicitly provided.
 
-使用配置文件验证：
+Validate using a configuration file:
 
 ```powershell
 python scripts/val.py --config configs/val/example_rgbt.yaml
 ```
 
-同样支持临时覆盖：
+Temporary parameter overrides are also supported:
 
 ```powershell
 python scripts/val.py --config configs/val/example_rgbt.yaml --batch 8 --device 1
 ```
 
-使用配置文件推理：
+Run inference using a configuration file:
 
 ```powershell
 python scripts/predict.py --config configs/predict/example_rgbt.yaml
 ```
 
-同样支持临时覆盖：
+Temporary parameter overrides are also supported:
 
 ```powershell
 python scripts/predict.py --config configs/predict/example_rgbt.yaml --conf 0.4
 ```
 
-## RGBT 四通道实现说明
+## RGBT Four-Channel Implementation
 
-默认 YOLO 只假设输入是 3 通道 RGB 图像，而这个仓库为了支持 `RGBT` 四通道输入，对源码做了成体系的修改。核心思路不是简单把第一层卷积从 3 通道改成 4 通道，而是把整条输入链路都改造成了“多模态输入系统”。
+Standard YOLO assumes a 3-channel RGB input. To support 4-channel `RGBT` input, this repository introduces systematic modifications throughout the source code.
 
-### 1. 参数层新增了通道数和模态类型
+The core idea is not simply to change the first convolutional layer from 3 input channels to 4. Instead, the entire input pipeline is extended into a multimodal input system.
 
-仓库在 [ultralytics/cfg/default.yaml](E:/master/github_project/YOLOv11-RGBT/ultralytics/cfg/default.yaml:131) 中增加了两个关键参数：
+### 1. Channel Count and Modality Type Parameters
 
-- `channels`
-- `use_simotm`
+Two key parameters were added to [ultralytics/cfg/default.yaml](E:/master/github_project/YOLOv11-RGBT/ultralytics/cfg/default.yaml:131):
 
-其中：
+* `channels`
+* `use_simotm`
 
-- `channels` 用来声明模型输入通道数，例如 `RGBT` 时通常设为 `4`
-- `use_simotm` 用来声明输入模式，例如 `RGBT`、`RGBRGB6C`、`Gray`、`SimOTM`
+Specifically:
 
-这样训练、验证、推理都可以显式知道当前处理的是哪种模态输入，而不是默认按 3 通道 RGB 处理。
+* `channels` specifies the number of input channels. For `RGBT`, it is typically set to `4`.
+* `use_simotm` specifies the input modality, such as `RGBT`, `RGBRGB6C`, `Gray`, or `SimOTM`.
 
-### 2. 数据加载层负责把 visible 和 infrared 拼成 4 通道
+This allows the training, validation, and inference pipelines to explicitly determine the current input modality instead of assuming standard 3-channel RGB input.
 
-最关键的改动在 [ultralytics/data/base.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/base.py:267) 的 `load_image()`。
+### 2. The Data Loader Combines Visible and Infrared Images into Four Channels
 
-在 `RGBT` 分支中，代码会：
+The most important modification is located in `load_image()` in [ultralytics/data/base.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/base.py:267).
 
-1. 读取 visible 图像，得到 3 通道 BGR
-2. 将路径中的 `visible` 替换为 `infrared`，读取对应红外图像，得到 1 通道灰度图
-3. 如果两个模态尺寸不同，分别 resize
-4. 最后将 `B,G,R` 和红外通道合并成一个 4 通道图像
+In the `RGBT` branch, the code:
 
-也就是说，进入网络前的数据不再是“两张图”，而是一张 `H x W x 4` 的四通道图像。
+1. Loads the visible image as a 3-channel BGR image.
+2. Replaces `visible` with `infrared` in the file path and loads the corresponding infrared image as a single-channel grayscale image.
+3. Resizes the two modalities independently if their spatial dimensions differ.
+4. Concatenates the `B,G,R` channels with the infrared channel to form a four-channel image.
 
-同样的逻辑在推理加载器 [ultralytics/data/loaders.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/loaders.py:547) 里也实现了一遍，因为推理阶段不走训练时的数据集类。
+Therefore, the input passed to the network is no longer represented as two separate images, but as a single tensor with shape `H x W x 4`.
 
-### 3. train / val / predict 全链路透传四通道信息
+The same logic is implemented separately in the inference loader [ultralytics/data/loaders.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/loaders.py:547), because inference does not use the same dataset class as training.
 
-为了让数据构建、warmup、推理过程都知道当前输入不是默认的 3 通道，仓库把 `use_simotm` 和 `channels` 一路传了下去。
+### 3. Four-Channel Information Is Propagated Through Training, Validation, and Inference
 
-关键位置包括：
+To ensure that dataset construction, model warmup, and inference correctly handle non-standard input channels, `use_simotm` and `channels` are propagated throughout the entire pipeline.
 
-- [ultralytics/data/build.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/build.py:96)
-- [ultralytics/models/yolo/detect/train.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/models/yolo/detect/train.py:43)
-- [ultralytics/models/yolo/detect/val.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/models/yolo/detect/val.py:243)
-- [ultralytics/engine/predictor.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/engine/predictor.py:250)
-- [ultralytics/engine/validator.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/engine/validator.py:98)
+Key locations include:
 
-比如验证阶段的 warmup 已经不是默认的 `(batch, 3, H, W)`，而是改成了 `(batch, channels, H, W)`，见 [ultralytics/engine/validator.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/engine/validator.py:163)。
+* [ultralytics/data/build.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/build.py:96)
+* [ultralytics/models/yolo/detect/train.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/models/yolo/detect/train.py:43)
+* [ultralytics/models/yolo/detect/val.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/models/yolo/detect/val.py:243)
+* [ultralytics/engine/predictor.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/engine/predictor.py:250)
+* [ultralytics/engine/validator.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/engine/validator.py:98)
 
-### 4. 数据增强和可视化也做了四通道适配
+For example, the validation warmup tensor is no longer hard-coded as `(batch, 3, H, W)`. Instead, it uses `(batch, channels, H, W)`, as implemented in [ultralytics/engine/validator.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/engine/validator.py:163).
 
-只修改读取层还不够，因为默认的数据增强和显示流程通常只服务于 1 通道或 3 通道图像。
+### 4. Data Augmentation and Visualization Support Four-Channel Input
 
-仓库在 [ultralytics/data/augment.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/augment.py:1074) 中增加了按通道数分支处理的逻辑，例如：
+Modifying only the image-loading pipeline is not sufficient because standard data augmentation and visualization pipelines are generally designed for one-channel or three-channel images.
 
-- 4 通道 padding 使用 `(114, 114, 114, 114)`
-- 区分 1 / 3 / 4 / 6 通道做不同处理
-- 对 4 通道图像通常只对前 3 个 BGR 通道做颜色类增强，红外通道单独保留或单独处理
+Additional channel-dependent processing logic was introduced in [ultralytics/data/augment.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/augment.py:1074), including:
 
-可视化和推理显示也做了适配，例如：
+* Four-channel padding using `(114, 114, 114, 114)`.
+* Different processing branches for 1-, 3-, 4-, and 6-channel inputs.
+* Color-based augmentation is generally applied only to the first three BGR channels, while the infrared channel is preserved or processed separately.
 
-- [ultralytics/utils/plotting.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/utils/plotting.py:917)
-- [ultralytics/engine/predictor.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/engine/predictor.py:452)
+Visualization and inference display logic were also adapted, including:
 
-因为 4 通道图像不能再按普通 RGB 图像直接显示，所以这里专门增加了对 4 通道和 6 通道的分支显示逻辑。
+* [ultralytics/utils/plotting.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/utils/plotting.py:917)
+* [ultralytics/engine/predictor.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/engine/predictor.py:452)
 
-### 5. 模型结构层真正支持四通道输入和双分支融合
+Because four-channel images cannot be displayed directly as standard RGB images, separate visualization branches were introduced for four-channel and six-channel inputs.
 
-模型 YAML 中明确把输入通道改成了 `ch: 4`，例如：
+### 5. The Model Architecture Supports Four-Channel Input and Dual-Branch Fusion
+
+The model YAML explicitly sets the input channel count to `ch: 4`, for example:
+
 [ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion.yaml](E:/master/github_project/YOLOv11-RGBT/ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion.yaml:17)
 
-但作者并没有把 4 通道直接塞进一个普通 backbone，而是通过自定义模块把 4 通道再次拆成两个分支：
+However, instead of directly feeding the four channels into a conventional backbone, the input is split back into two branches using custom modules:
 
-- `SilenceChannel [0,3]`：取前 3 个通道，作为 visible 分支
-- `SilenceChannel [3,4]`：取第 4 个通道，作为 infrared 分支
+* `SilenceChannel [0,3]`: extracts the first three channels for the visible branch.
+* `SilenceChannel [3,4]`: extracts the fourth channel for the infrared branch.
 
-这个模块定义在：
+The module is defined in:
+
 [ultralytics/nn/modules/conv.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/nn/modules/conv.py:352)
 
-本质就是按通道切片：
+Conceptually, the implementation is simply channel slicing:
 
 ```python
 return x[..., self.c_start:self.c_end, :, :]
 ```
 
-模型解析器也专门对这个模块做了支持，见：
+The model parser was also extended to support this module:
+
 [ultralytics/nn/tasks.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/nn/tasks.py:1091)
 
-解析器知道 `SilenceChannel[a,b]` 的输出通道数是 `b-a`，这样后续网络层的 shape 推导才能正确进行。
+The parser determines that the number of output channels from `SilenceChannel[a,b]` is `b-a`, allowing subsequent network layers to infer tensor dimensions correctly.
 
-### 6. 以 midfusion 为例，网络如何处理 RGBT
+### 6. How RGBT Is Processed in the Mid-Fusion Architecture
 
-以 [yolo11-RGBT-midfusion.yaml](E:/master/github_project/YOLOv11-RGBT/ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion.yaml:21) 为例：
+Using [yolo11-RGBT-midfusion.yaml](E:/master/github_project/YOLOv11-RGBT/ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion.yaml:21) as an example:
 
-1. 输入首先是 4 通道张量
-2. 通过 `SilenceChannel [0,3]` 切出 visible 三通道
-3. 通过 `SilenceChannel [3,4]` 切出 infrared 单通道
-4. 两个分支分别走自己的 backbone
-5. 在中间层通过 `Concat` 等方式融合 visible 和 infrared 特征
-6. 融合后的特征再进入检测头
+1. The model first receives a four-channel input tensor.
+2. `SilenceChannel [0,3]` extracts the three visible channels.
+3. `SilenceChannel [3,4]` extracts the single infrared channel.
+4. The two modalities are processed by separate backbone branches.
+5. Visible and infrared features are fused at intermediate layers using operations such as `Concat`.
+6. The fused features are then passed to the detection head.
 
-所以这个仓库的核心不是“把第一层卷积改成 4 通道”，而是“4 通道输入 + 双分支建模 + 指定层融合”。
+Therefore, the core design of this repository is not simply “changing the first convolution to accept four channels,” but rather:
 
-### 7. 和默认 YOLO 的本质区别
+**four-channel input + dual-branch feature extraction + fusion at selected network layers.**
 
-默认 YOLO：
+### 7. Key Differences from Standard YOLO
 
-- 假设输入就是单张 3 通道 RGB 图像
-- 数据加载只读一张图
-- 数据增强默认只考虑 1 通道或 3 通道
-- 模型 stem 默认只服务于单路输入
+Standard YOLO:
 
-这个仓库的 RGBT 版本：
+* Assumes a single 3-channel RGB image as input.
+* Loads only one image per sample.
+* Data augmentation primarily assumes one-channel or three-channel images.
+* The model stem is designed for a single input stream.
 
-- 数据层支持 visible / infrared 自动配对
-- 输入层支持拼成 4 通道张量
-- train / val / predict 全链路支持 `channels=4`
-- 数据增强和显示流程支持 4 通道
-- 模型结构支持 visible / infrared 双分支
-- 通过 early / mid / late fusion 等方式进行多模态融合
+This RGBT implementation:
 
-### 8. 最值得优先阅读的源码位置
+* Automatically pairs visible and infrared images at the data-loading stage.
+* Combines them into a four-channel input tensor.
+* Supports `channels=4` throughout training, validation, and inference.
+* Adapts data augmentation and visualization for four-channel inputs.
+* Supports separate visible and infrared backbone branches.
+* Supports multimodal fusion strategies such as early, mid, and late fusion.
 
-如果只想快速理解四通道 RGBT 是怎么做出来的，建议优先看下面这些文件：
+### 8. Recommended Source Files to Read First
 
-- [ultralytics/data/base.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/base.py:267)
-- [ultralytics/data/loaders.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/loaders.py:547)
-- [ultralytics/nn/modules/conv.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/nn/modules/conv.py:352)
-- [ultralytics/nn/tasks.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/nn/tasks.py:1091)
-- [ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion.yaml](E:/master/github_project/YOLOv11-RGBT/ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion.yaml:17)
-- [ultralytics/data/augment.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/augment.py:1074)
-- [ultralytics/engine/predictor.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/engine/predictor.py:117)
+To quickly understand how four-channel RGBT processing is implemented, the following files are the most important:
 
-一句话总结：这个仓库对源码的深度修改，不在于“把第一层卷积改成 4 输入通道”，而在于把 Ultralytics 的整条输入链路都改造成了多模态输入系统。
+* [ultralytics/data/base.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/base.py:267)
+* [ultralytics/data/loaders.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/loaders.py:547)
+* [ultralytics/nn/modules/conv.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/nn/modules/conv.py:352)
+* [ultralytics/nn/tasks.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/nn/tasks.py:1091)
+* [ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion.yaml](E:/master/github_project/YOLOv11-RGBT/ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion.yaml:17)
+* [ultralytics/data/augment.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/data/augment.py:1074)
+* [ultralytics/engine/predictor.py](E:/master/github_project/YOLOv11-RGBT/ultralytics/engine/predictor.py:117)
 
-## 新增模型能力
+In short, the main modification in this repository is not simply changing the first layer to accept four input channels. Instead, the entire Ultralytics input pipeline has been extended into a multimodal input system.
 
-### YOLOv11_RGBT + 残差融合
+## Added Model Capabilities
 
-仓库新增了推荐的 `YOLOv11_RGBT + Residual Fusion` 结构，用于替代原始 midfusion 中 RGB/T 特征的直接 `Concat`。该融合以 RGB 特征作为主路径，将红外特征作为可学习残差项注入：
+### YOLOv11_RGBT + Residual Fusion
+
+The repository introduces a `YOLOv11_RGBT + Residual Fusion` architecture as an alternative to the direct RGB/T feature `Concat` used in the original mid-fusion model.
+
+The fusion module uses RGB features as the main path and injects infrared features as a learnable residual component:
 
 ```python
 fused = rgb_proj + alpha * thermal_proj
 ```
 
-关键更新：
-- 新增 `RGBTResidualFusion` 模块。
-- RGB 和 thermal 特征先通过 `1x1 Conv` 对齐到同一通道数。
-- `alpha` 是可学习参数，默认初始化为 `0.1`，训练初期不会过强扰动 RGB 主路径。
-- P3/P4/P5 三个 RGB/T 融合点均替换为残差融合。
-- 新增配置文件：[ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-Residual.yaml](E:/master/github_project/YOLOv11-RGBT/ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-Residual.yaml:1)
+Key updates:
 
-训练时将配置中的 `model` 改为：
+* Added the `RGBTResidualFusion` module.
+* RGB and thermal features are first aligned to the same number of channels using `1x1 Conv`.
+* `alpha` is a learnable parameter initialized to `0.1`, preventing the thermal branch from excessively disturbing the RGB main path during the early stages of training.
+* The RGB/T fusion points at P3, P4, and P5 are all replaced with residual fusion.
+* Added the configuration file: [ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-Residual.yaml](E:/master/github_project/YOLOv11-RGBT/ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-Residual.yaml:1)
+
+To train this model, change the `model` entry in the configuration to:
+
 ```yaml
 model: ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-Residual.yaml
 use_simotm: RGBT
 channels: 4
 ```
 
-该版本适合作为当前优先实验方案；原始 `Concat` midfusion、Residual Fusion 和 BiFPN 可以作为三组消融对比。
+This version is recommended as a primary experimental configuration. The original `Concat` mid-fusion model, Residual Fusion, and BiFPN can be used as three ablation variants.
 
 ### YOLOv11_RGBT + BiFPN
 
-仓库新增了 `YOLOv11_RGBT + BiFPN` 结构，用于在 YOLO11 RGBT 双分支特征融合后引入可学习加权的 BiFPN 颈部融合。
+The repository also introduces a `YOLOv11_RGBT + BiFPN` architecture, which adds a learnable weighted BiFPN neck after dual-branch RGBT feature fusion.
 
-关键更新：
-- 新增 `BiFPNFusion` 模块，支持多输入特征的通道对齐、空间尺寸对齐和可学习权重归一化融合。
-- `parse_model()` 已支持在 YAML 中直接使用 `BiFPNFusion`。
-- 新增配置文件：[ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-BiFPN.yaml](E:/master/github_project/YOLOv11-RGBT/ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-BiFPN.yaml:1)
+Key updates:
 
-训练时将配置中的 `model` 改为：
+* Added a `BiFPNFusion` module that supports channel alignment, spatial-resolution alignment, and learnable normalized weighted fusion across multiple input features.
+* `parse_model()` has been extended so that `BiFPNFusion` can be directly specified in model YAML files.
+* Added the configuration file: [ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-BiFPN.yaml](E:/master/github_project/YOLOv11-RGBT/ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-BiFPN.yaml:1)
+
+To train this model, change the `model` entry in the configuration to:
+
 ```yaml
 model: ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-BiFPN.yaml
 use_simotm: RGBT
 channels: 4
 ```
 
-### YOLOv11_RGBT + SR 辅助分支
+### YOLOv11_RGBT + SR Auxiliary Branch
 
-仓库新增了 `YOLOv11_RGBT + SR` 超分辨率辅助分支。该结构保持原检测头输出不变，在训练阶段额外从浅层 RGBT 融合特征重建 4 通道输入图像，并将 SR 重建损失加入总 loss，用于增强多模态特征表达。
+The repository introduces a `YOLOv11_RGBT + SR` super-resolution auxiliary branch.
 
-关键更新：
-- 新增 `SRHead`：从 P3/8 级别特征上采样重建 RGBT 图像。
-- 新增 `DetectSR`：检测输出与 SR 输出共存，推理仍以检测结果为主。
-- `v8DetectionLoss` 已支持叠加 `sr_loss`，默认使用 `L1 loss`。
-- 新增超参数 `sr` 控制 SR 辅助损失权重，默认值为 `0.1`。
-- 训练日志在 SR 模型下会显示 `box_loss / cls_loss / dfl_loss / sr_loss`。
-- 新增配置文件：[ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-SR.yaml](E:/master/github_project/YOLOv11-RGBT/ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-SR.yaml:1)
+The architecture keeps the original detection head unchanged while adding an auxiliary reconstruction branch during training. The branch reconstructs the four-channel RGBT input from shallow fused features, and the SR reconstruction loss is added to the overall training objective to improve multimodal feature representation.
 
-训练时将配置中的 `model` 改为：
+Key updates:
+
+* Added `SRHead`, which reconstructs the RGBT image by upsampling features from the P3/8 level.
+* Added `DetectSR`, allowing detection outputs and SR outputs to coexist. Inference remains focused on object detection outputs.
+* `v8DetectionLoss` has been extended to include `sr_loss`, using `L1 loss` by default.
+* Added the `sr` hyperparameter to control the weight of the SR auxiliary loss, with a default value of `0.1`.
+* Training logs for SR models report `box_loss / cls_loss / dfl_loss / sr_loss`.
+* Added the configuration file: [ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-SR.yaml](E:/master/github_project/YOLOv11-RGBT/ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-SR.yaml:1)
+
+To train this model, change the configuration to:
+
 ```yaml
 model: ultralytics/cfg/models/11-RGBT/yolo11-RGBT-midfusion-SR.yaml
 use_simotm: RGBT
@@ -328,20 +345,23 @@ channels: 4
 sr: 0.1
 ```
 
-### 验证状态
+### Validation Status
 
-已完成以下静态验证：
-- Python 语法编译检查通过。
-- `yolo11-RGBT-midfusion-BiFPN.yaml` 和 `yolo11-RGBT-midfusion-SR.yaml` 可被 YAML 解析。
-- SR 配置的层引用索引检查通过。
+The following static checks have been completed:
 
-完整模型实例化 forward 需要当前 Python 环境可正常导入 `ultralytics`。如果遇到 `NumPy 2.x` 与旧版 `matplotlib` 二进制扩展不兼容的问题，请先调整环境，例如降级到 `numpy<2` 或升级相关二进制包。
+* Python syntax compilation checks passed.
+* `yolo11-RGBT-midfusion-BiFPN.yaml` and `yolo11-RGBT-midfusion-SR.yaml` can be parsed successfully as YAML.
+* Layer-reference indices in the SR configuration have been verified.
 
-## 说明
+Full model instantiation and forward-pass validation require the current Python environment to import `ultralytics` successfully.
 
-- 自定义融合模型配置位于 `ultralytics/cfg/models/*-RGBT/`。
-- `ultralytics/cfg/datasets/` 下的数据集 YAML 仍保留了原作者本地路径，需要按你自己的数据位置修改。
-- 训练配置示例见 [configs/train/example_rgbt.yaml](E:/master/github_project/YOLOv11-RGBT/configs/train/example_rgbt.yaml:1)。
-- 验证配置示例见 [configs/val/example_rgbt.yaml](E:/master/github_project/YOLOv11-RGBT/configs/val/example_rgbt.yaml:1)。
-- 推理配置示例见 [configs/predict/example_rgbt.yaml](E:/master/github_project/YOLOv11-RGBT/configs/predict/example_rgbt.yaml:1)。
-- 大权重文件、数据集和 `runs/` 输出默认不纳入 Git 管理。
+If compatibility problems occur between `NumPy 2.x` and older binary extensions from packages such as `matplotlib`, adjust the environment first, for example by downgrading to `numpy<2` or upgrading the relevant binary packages.
+
+## Notes
+
+* Custom fusion model configurations are located under `ultralytics/cfg/models/*-RGBT/`.
+* Dataset YAML files under `ultralytics/cfg/datasets/` still contain local paths from the original author and should be modified according to your own dataset location.
+* Example training configuration: [configs/train/example_rgbt.yaml](E:/master/github_project/YOLOv11-RGBT/configs/train/example_rgbt.yaml:1).
+* Example validation configuration: [configs/val/example_rgbt.yaml](E:/master/github_project/YOLOv11-RGBT/configs/val/example_rgbt.yaml:1).
+* Example inference configuration: [configs/predict/example_rgbt.yaml](E:/master/github_project/YOLOv11-RGBT/configs/predict/example_rgbt.yaml:1).
+* Large model weights, datasets, and `runs/` outputs are excluded from Git version control by default.
